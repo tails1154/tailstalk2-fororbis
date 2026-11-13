@@ -34,18 +34,21 @@ enum Screen
     SCREEN_SUCCESS,
 };
 
-static const Color colBackground = {0x17, 0x18, 0x1F};
-static const Color colText = {0xF2, 0xF2, 0xF7};
-static const Color colMuted = {0x9A, 0x9C, 0xAD};
-static const Color colAccent = {0x7C, 0x6C, 0xF0};
-static const Color colSuccess = {0x3B, 0xA5, 0x5C};
-static const Color colError = {0xE0, 0x5A, 0x5A};
+static const Color colBackground = {0x11, 0x13, 0x1A};
+static const Color colCard = {0x1E, 0x20, 0x27};
+static const Color colField = {0x2B, 0x2D, 0x35};
+static const Color colText = {0xF2, 0xF3, 0xF5};
+static const Color colMuted = {0x94, 0x9B, 0xA4};
+static const Color colAccent = {0x58, 0x65, 0xF2};
+static const Color colSuccess = {0x23, 0xA5, 0x5A};
+static const Color colError = {0xED, 0x42, 0x45};
 
 static SDL_Window* window = NULL;
 static SDL_Renderer* renderer = NULL;
 
 static FT_Face fontTitle;
 static FT_Face fontBody;
+static FT_Face fontLabel;
 
 static std::string email;
 static std::string password;
@@ -63,7 +66,9 @@ static bool SystemInit()
         return false;
     if (!InitFont(&fontTitle, "/app0/assets/fonts/Bebas-Regular.ttf", 96))
         return false;
-    if (!InitFont(&fontBody, "/app0/assets/fonts/VeraMono.ttf", 36))
+    if (!InitFont(&fontBody, "/app0/assets/fonts/VeraMono.ttf", 34))
+        return false;
+    if (!InitFont(&fontLabel, "/app0/assets/fonts/VeraMono.ttf", 24))
         return false;
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK) != 0)
@@ -89,8 +94,7 @@ static void DrawText(const std::string& text, FT_Face face, int x, int y, Color 
 {
     if (text.empty())
         return;
-    std::string copy = text; // CreateText takes a mutable buffer
-    SDL_Texture* tex = CreateText(renderer, &copy[0], face, color, Color{0, 0, 0});
+    SDL_Texture* tex = CreateText(renderer, text.c_str(), face, color);
     if (!tex)
         return;
     int w = 0, h = 0;
@@ -123,13 +127,14 @@ static void DrawFormRow(int row, const char* label, const std::string& value, co
     const int rowY = 380 + row * 130;
     const bool isSelected = (selected == row);
 
-    DrawBox(360, rowY, 1200, 100, Color{0x25, 0x27, 0x30}, isSelected);
-    DrawText(label, fontBody, 400, rowY + 30, colMuted);
-    DrawText(value.empty() ? placeholder : value, fontBody, 700, rowY + 30, value.empty() ? colMuted : colText);
+    DrawBox(360, rowY, 1200, 100, colField, isSelected);
+    DrawText(label, fontLabel, 400, rowY + 14, colMuted);
+    DrawText(value.empty() ? placeholder : value, fontBody, 400, rowY + 46, value.empty() ? colMuted : colText);
 }
 
 static void DrawForm()
 {
+    DrawBox(0, 0, FRAME_WIDTH, 8, colAccent, false);
     DrawText("TailsTalk 2", fontTitle, 360, 120, colText);
     DrawText("Very early alpha. Log in with your email and password.", fontBody, 360, 250, colMuted);
 
@@ -145,15 +150,17 @@ static void DrawForm()
     if (!statusMessage.empty())
         DrawText(statusMessage, fontBody, 360, 900, statusIsError ? colError : colMuted);
 
-    DrawText("Up/Down to move   X to select   Options to quit", fontBody, 360, 1000, colMuted);
+    DrawText("Up/Down to move   X to select   Options to quit", fontLabel, 360, 1000, colMuted);
 }
 
 static void DrawSuccess()
 {
-    DrawBox(360, 300, 1200, 480, colSuccess, false);
+    DrawBox(0, 0, FRAME_WIDTH, 8, colSuccess, false);
+    DrawBox(360, 300, 1200, 480, colCard, false);
+    DrawBox(360, 300, 1200, 12, colSuccess, false);
     DrawText("Login succeeded", fontTitle, 420, 380, colText);
     DrawText("Signed in as " + email, fontBody, 420, 540, colText);
-    DrawText("Circle to go back", fontBody, 420, 680, colText);
+    DrawText("Circle to go back", fontLabel, 420, 680, colMuted);
 }
 
 static void Render()
@@ -166,6 +173,7 @@ static void Render()
     else
         DrawSuccess();
 
+    SDL_RenderPresent(renderer);
     SDL_UpdateWindowSurface(window);
 }
 
@@ -242,12 +250,13 @@ int main(int argc, char* argv[])
     }
 
     bool running = true;
-    bool dirty = true;
+    bool dirty = true; // input sets this; drawing happens every frame anyway
+    (void)dirty;
     while (running)
     {
         SDL_Event ev;
-        // Wait briefly for input so the loop does not spin
-        if (SDL_WaitEventTimeout(&ev, 250))
+        // Handle input for up to one frame, then draw
+        if (SDL_WaitEventTimeout(&ev, 16))
         {
             do
             {
@@ -280,11 +289,7 @@ int main(int argc, char* argv[])
             } while (SDL_PollEvent(&ev));
         }
 
-        if (dirty)
-        {
-            Render();
-            dirty = false;
-        }
+        Render();
     }
 
     SDL_DestroyRenderer(renderer);
